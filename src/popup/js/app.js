@@ -110,7 +110,7 @@
                     staticClass: "volume-slider__slider",
                     attrs: {id: "volume-slider", type: "range", min: "0", max: "600", step: "10", autofocus: ""},
                     domProps: {value: t.$parent.soundVolume},
-                    on: {change: t.$parent.soundValueChangeHandler}
+                    on: {change: t.$parent.soundValueChangeHandler, input: t.$parent.soundValueInputHandler}
                 })]), n("section", {staticClass: "volume-info"}, [n("span", {staticClass: "volume-info__volume-min"}, [t._v("0 %")]), n("span", {staticClass: "volume-info__volume-current"}, [t._v(t._s(t.$t("volumeLabel")) + " " + t._s(t.$parent.soundVolume) + " %")]), n("span", {staticClass: "volume-info__volume-max"}, [t._v("600 %")])]), n("section", {staticClass: "tabs"}, [t.$parent.audibleTabs.length ? n("div", {staticClass: "tabs__title"}, [t._v(t._s(t.$t("tabsLabel")))]) : n("div", {staticClass: "tabs__title"}, [t._v(t._s(t.$t("noTabsLabel")))]), t._l(t.$parent.audibleTabs, (function (e) {
                     return n("div", {key: e.id, staticClass: "tabs__list"}, [n("a", {
                         staticClass: "tab",
@@ -204,6 +204,8 @@
                     this.soundVolume = t, m().storage.local.set({savedVolume: t})
                 }, soundValueChangeHandler: function (t) {
                     this.setSoundVolume(t.target.value), this.sendToActiveTab("changeSoundVolume")
+                }, soundValueInputHandler: function (t) {
+                    this.soundVolume = t.target.value, this.sendToActiveTab("changeSoundVolume")
                 }, button100ClickHandler: function () {
                     this.setSoundVolume(100), this.sendToActiveTab("changeSoundVolume")
                 }, buttonMuteClickHandler: function () {
@@ -252,9 +254,17 @@
                 }, init: function () {
                     var t = this;
                     try {
-                        this.updateSoundVolume(), this.listAudible(), document.getElementById("volume-slider").focus(), this.initNotification(), document.documentElement.addEventListener("keypress", (function (e) {
-                            var n = parseInt(e.key.toLowerCase());
-                            n >= 0 && n <= 6 && (t.setSoundVolume(100 * n), t.sendToActiveTab("changeSoundVolume"))
+                        m().storage.local.get({savedVolume: 100}, (function (r) {
+                            t.soundVolume = Number(r.savedVolume);
+                            t.sendToActiveTab("changeSoundVolume");
+                        }));
+                        this.listAudible(), document.getElementById("volume-slider").focus(), this.initNotification(), document.addEventListener("keydown", (function (e) {
+                            var n = parseInt(e.key);
+                            if (!isNaN(n) && n >= 0 && n <= 6) {
+                                e.preventDefault();
+                                t.setSoundVolume(100 * n);
+                                t.sendToActiveTab("changeSoundVolume");
+                            }
                         }));
                         for (var e = document.getElementsByClassName("advert"), n = e.item(Math.round(Math.random() * (e.length - 1))), i = 0; i < e.length; i++) e.item(i) !== n && e.item(i).parentNode.removeChild(e.item(i))
                     } catch (a) {
