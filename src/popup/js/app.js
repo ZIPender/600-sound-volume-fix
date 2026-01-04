@@ -201,7 +201,7 @@
                         }
                     }))
                 }, setSoundVolume: function (t) {
-                    this.soundVolume = t
+                    this.soundVolume = t, m().storage.local.set({savedVolume: t})
                 }, soundValueChangeHandler: function (t) {
                     this.setSoundVolume(t.target.value), this.sendToActiveTab("changeSoundVolume")
                 }, button100ClickHandler: function () {
@@ -221,7 +221,13 @@
                 }, updateSoundVolume: function () {
                     var t = this;
                     this.sendToActiveTab("getSoundVolume", (function (e) {
-                        t.setSoundVolume(e && e.soundVolume >= 0 ? e.soundVolume : 100)
+                        if (e && e.soundVolume >= 0) {
+                            t.setSoundVolume(e.soundVolume)
+                        } else {
+                            m().storage.local.get({savedVolume: 100}, (function (r) {
+                                t.setSoundVolume(r.savedVolume)
+                            }))
+                        }
                     }))
                 }, listAudible: function () {
                     var t = this;

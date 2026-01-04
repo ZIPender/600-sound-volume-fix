@@ -16,7 +16,14 @@ function setBadgeText(soundVolume) {
 
 function updateBadgeText() {
     sendToActiveTab('getSoundVolume', response => {
-        setBadgeText(response && response.soundVolume >= 0 ? response.soundVolume : 100);
+        if (response && response.soundVolume >= 0) {
+            setBadgeText(response.soundVolume);
+        } else {
+            // Fall back to saved volume from storage
+            _browser().storage.local.get({savedVolume: 100}, (result) => {
+                setBadgeText(result.savedVolume);
+            });
+        }
     });
 }
 
@@ -46,6 +53,10 @@ _browser().runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.warn(sendResponse);
     }
     if (request.action === 'changeSoundVolume') {
+        // Save the volume to storage
+        if (request.data.soundVolume !== undefined) {
+            _browser().storage.local.set({savedVolume: request.data.soundVolume});
+        }
         // setBadgeText(request.data.soundVolume);
         if (_browser().tabCapture) {
             let audioState = window.audioStates[sender.tab.id];
