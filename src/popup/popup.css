@@ -259,7 +259,7 @@ body {
     color: #606060;
     transition: background-color 0.3s, color 0.3s, border-color 0.3s;
     z-index: 1000;
-    pointer-events: auto
+    pointer-events: auto;
 }
 
 .theme-toggle:hover {
