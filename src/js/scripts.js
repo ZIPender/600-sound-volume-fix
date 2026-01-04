@@ -13,8 +13,11 @@
     let currentVolume = 100;
     let lastAppliedVolume = null;
     
-    // Map to track audio contexts for each media element
-    const audioContexts = new WeakMap();
+    // Single shared AudioContext for all media elements (browser limit is typically 6)
+    let sharedAudioContext = null;
+    
+    // Map to track gain nodes for each media element
+    const elementGainNodes = new WeakMap();
 
     // ============================================================
     // Configuration
@@ -87,8 +90,12 @@
                 getBrowser().runtime.sendMessage(
                     { action: action, data: { soundVolume: currentVolume } },
                     (response) => {
-                        // Suppress any runtime errors
-                        void getBrowser().runtime.lastError;
+                        // Access lastError to suppress "Unchecked runtime.lastError" warnings
+                        // This is the standard pattern for handling potential disconnected ports
+                        var lastError = getBrowser().runtime.lastError;
+                        if (lastError) {
+                            // Ignore - connection may have been closed
+                        }
                         resolve(response);
                     }
                 );
@@ -119,10 +126,29 @@
     // Audio Context Management (Part of changeSoundVolume rewrite)
     // ============================================================
     
+    function getSharedAudioContext() {
+        if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+            try {
+                sharedAudioContext = new AudioContext();
+            } catch (e) {
+                return null;
+            }
+        }
+        
+        // Resume suspended AudioContext (browsers often suspend until user interaction)
+        if (sharedAudioContext.state === 'suspended') {
+            sharedAudioContext.resume().catch(function() {
+                // Ignore resume errors
+            });
+        }
+        
+        return sharedAudioContext;
+    }
+    
     function setupAudioContext(mediaElement) {
         // Skip if already set up or if setup previously failed
-        if (audioContexts.has(mediaElement)) {
-            return audioContexts.get(mediaElement);
+        if (elementGainNodes.has(mediaElement)) {
+            return elementGainNodes.get(mediaElement);
         }
 
         const src = mediaElement.src || mediaElement.currentSrc;
@@ -133,7 +159,12 @@
         }
 
         try {
-            const audioContext = new AudioContext();
+            const audioContext = getSharedAudioContext();
+            if (!audioContext) {
+                elementGainNodes.set(mediaElement, { failed: true });
+                return null;
+            }
+            
             const gainNode = audioContext.createGain();
             const source = audioContext.createMediaElementSource(mediaElement);
             
@@ -141,17 +172,16 @@
             gainNode.connect(audioContext.destination);
             
             const contextData = {
-                context: audioContext,
                 gain: gainNode,
                 source: source,
                 failed: false
             };
             
-            audioContexts.set(mediaElement, contextData);
+            elementGainNodes.set(mediaElement, contextData);
             return contextData;
         } catch (e) {
             // Mark as failed so we don't retry
-            audioContexts.set(mediaElement, { failed: true });
+            elementGainNodes.set(mediaElement, { failed: true });
             return null;
         }
     }
@@ -164,8 +194,17 @@
         }
 
         const gainValue = volume / 100;
-        if (contextData.gain.gain.value !== gainValue) {
-            contextData.gain.gain.value = gainValue;
+        const currentGainValue = contextData.gain.gain.value;
+        
+        if (currentGainValue !== gainValue) {
+            // Use setValueAtTime for smooth audio transition (avoids clicks/pops)
+            const audioContext = getSharedAudioContext();
+            if (audioContext) {
+                contextData.gain.gain.setValueAtTime(gainValue, audioContext.currentTime);
+            } else {
+                // Fallback to direct assignment if context unavailable
+                contextData.gain.gain.value = gainValue;
+            }
         }
         return true;
     }
@@ -189,10 +228,14 @@
         saveVolume(currentVolume);
         
         // Notify background script (for Chrome tab capture fallback)
-        sendToBackground('changeSoundVolume');
+        // Fire-and-forget - we don't need to wait for the result
+        sendToBackground('changeSoundVolume').catch(function() {
+            // Silently ignore errors - background communication is best-effort
+        });
 
-        // In Chrome, background script handles volume via tab capture
-        // In Firefox, we use Web Audio API directly
+        // In Chrome (browser API undefined), the background script handles volume
+        // via tab capture API, so we skip the Web Audio API approach here.
+        // In Firefox, we use Web Audio API directly on media elements.
         if (typeof browser === 'undefined') {
             return;
         }
@@ -235,8 +278,10 @@
         // Register message listener
         getBrowser().runtime.onMessage.addListener(handleMessage);
         
-        // Load saved volume on startup
-        loadSavedVolume();
+        // Load saved volume on startup (fire-and-forget - volume defaults to 100)
+        loadSavedVolume().catch(function() {
+            // Silently ignore errors, currentVolume defaults to 100
+        });
     }
 
     // Run initialization
