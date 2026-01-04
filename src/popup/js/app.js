@@ -256,11 +256,29 @@
                     try {
                         m().storage.local.get({savedVolume: 100}, (function (r) {
                             t.soundVolume = Number(r.savedVolume);
+                            // Update slider value in DOM
+                            var slider = document.getElementById("volume-slider");
+                            if (slider) {
+                                slider.value = t.soundVolume;
+                            }
                             t.sendToActiveTab("changeSoundVolume");
                         }));
                         this.listAudible(), document.getElementById("volume-slider").focus(), this.initNotification(), document.addEventListener("keydown", (function (e) {
-                            var n = parseInt(e.key);
-                            if (!isNaN(n) && n >= 0 && n <= 6) {
+                            // Support both regular number keys and numpad keys
+                            var n = -1;
+                            // Check e.key first (works for both regular and numpad)
+                            if (e.key >= '0' && e.key <= '9') {
+                                n = parseInt(e.key);
+                            }
+                            // Also check e.code for numpad (Numpad0-Numpad9) and regular digits (Digit0-Digit9)
+                            if (n === -1 && e.code) {
+                                if (e.code.startsWith('Numpad') && e.code.length === 7) {
+                                    n = parseInt(e.code.charAt(6));
+                                } else if (e.code.startsWith('Digit') && e.code.length === 6) {
+                                    n = parseInt(e.code.charAt(5));
+                                }
+                            }
+                            if (n >= 0 && n <= 6) {
                                 e.preventDefault();
                                 t.setSoundVolume(100 * n);
                                 t.sendToActiveTab("changeSoundVolume");
