@@ -274,37 +274,24 @@
     // ============================================================
     
     function setupMutationObserver() {
-        const observer = new MutationObserver(function(mutations) {
-            let hasNewMedia = false;
-            
-            mutations.forEach(function(mutation) {
-                mutation.addedNodes.forEach(function(node) {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         // Check if the added node is a media element
                         if (node.tagName === 'VIDEO' || node.tagName === 'AUDIO') {
                             processMediaElement(node);
-                            hasNewMedia = true;
                         }
                         // Check for media elements within the added node
                         if (node.querySelectorAll) {
-                            var mediaElements = node.querySelectorAll('video, audio');
-                            mediaElements.forEach(function(el) {
+                            const mediaElements = node.querySelectorAll('video, audio');
+                            mediaElements.forEach((el) => {
                                 processMediaElement(el);
-                                hasNewMedia = true;
                             });
                         }
                     }
                 });
             });
-            
-            // Apply volume to new elements if any were found
-            if (hasNewMedia && typeof browser !== 'undefined') {
-                getMediaElements().forEach(function(element) {
-                    if (!element.paused) {
-                        applyVolumeToElement(element, currentVolume);
-                    }
-                });
-            }
         });
         
         observer.observe(document.documentElement, {
