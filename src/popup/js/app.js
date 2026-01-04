@@ -256,11 +256,33 @@
                     try {
                         m().storage.local.get({savedVolume: 100}, (function (r) {
                             t.soundVolume = Number(r.savedVolume);
+                            // Update slider value in DOM
+                            var slider = document.getElementById("volume-slider");
+                            if (slider) {
+                                slider.value = t.soundVolume;
+                            }
                             t.sendToActiveTab("changeSoundVolume");
                         }));
                         this.listAudible(), document.getElementById("volume-slider").focus(), this.initNotification(), document.addEventListener("keydown", (function (e) {
-                            var n = parseInt(e.key);
-                            if (!isNaN(n) && n >= 0 && n <= 6) {
+                            // Support both regular number keys (0-6) and numpad keys (Numpad0-6)
+                            var n = -1;
+                            // e.key returns the character for both regular and numpad keys
+                            if (e.key >= '0' && e.key <= '6') {
+                                n = parseInt(e.key);
+                            }
+                            // Fallback: also check e.code for robustness (some browsers/keyboards may differ)
+                            else if (e.code) {
+                                var numFromCode = -1;
+                                if (e.code.startsWith('Numpad')) {
+                                    numFromCode = parseInt(e.code.slice(6));
+                                } else if (e.code.startsWith('Digit')) {
+                                    numFromCode = parseInt(e.code.slice(5));
+                                }
+                                if (!isNaN(numFromCode) && numFromCode >= 0 && numFromCode <= 6) {
+                                    n = numFromCode;
+                                }
+                            }
+                            if (n >= 0 && n <= 6) {
                                 e.preventDefault();
                                 t.setSoundVolume(100 * n);
                                 t.sendToActiveTab("changeSoundVolume");

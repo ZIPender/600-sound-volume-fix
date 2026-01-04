@@ -44,15 +44,17 @@
         return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     
-    // Load saved theme preference or detect from browser
+    // Apply browser theme immediately while waiting for storage
+    applyTheme(detectBrowserTheme());
+    
+    // Then load saved theme preference (overrides if user had set one)
     _browser().storage.local.get({themePreference: null}, function(result) {
         var isDark;
         if (result.themePreference !== null) {
             isDark = result.themePreference === 'dark';
-        } else {
-            isDark = detectBrowserTheme();
+            applyTheme(isDark);
         }
-        applyTheme(isDark);
+        // If no saved preference, keep the browser theme that was already applied
     });
     
     // Listen for browser theme changes
@@ -68,7 +70,9 @@
     }
     
     // Toggle button click handler
-    themeToggle.addEventListener('click', function() {
+    themeToggle.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
         var isDark = document.body.classList.contains('dark-theme');
         var newTheme = isDark ? 'light' : 'dark';
         _browser().storage.local.set({themePreference: newTheme});
