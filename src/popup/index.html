@@ -10,10 +10,71 @@
     <link href="js/chunk-vendors.js" rel="preload" as="script">
 </head>
 <body>
+<button class="theme-toggle" id="theme-toggle" title="Toggle theme">🌙</button>
 <noscript><strong>We're sorry but popup doesn't work properly without JavaScript enabled. Please enable it to
     continue.</strong></noscript>
 <div id="app"></div>
 <script src="js/chunk-vendors.js"></script>
 <script src="js/app.js"></script>
+<script>
+(function() {
+    function _browser() {
+        if (typeof browser !== 'undefined') {
+            return browser;
+        } else {
+            return chrome;
+        }
+    }
+
+    var themeToggle = document.getElementById('theme-toggle');
+    
+    function applyTheme(isDark) {
+        if (isDark) {
+            document.body.classList.add('dark-theme');
+            themeToggle.textContent = '☀️';
+            themeToggle.title = 'Switch to light theme';
+        } else {
+            document.body.classList.remove('dark-theme');
+            themeToggle.textContent = '🌙';
+            themeToggle.title = 'Switch to dark theme';
+        }
+    }
+    
+    function detectBrowserTheme() {
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    
+    // Load saved theme preference or detect from browser
+    _browser().storage.local.get({themePreference: null}, function(result) {
+        var isDark;
+        if (result.themePreference !== null) {
+            isDark = result.themePreference === 'dark';
+        } else {
+            isDark = detectBrowserTheme();
+        }
+        applyTheme(isDark);
+    });
+    
+    // Listen for browser theme changes
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            // Only apply browser theme if user hasn't set a manual preference
+            _browser().storage.local.get({themePreference: null}, function(result) {
+                if (result.themePreference === null) {
+                    applyTheme(e.matches);
+                }
+            });
+        });
+    }
+    
+    // Toggle button click handler
+    themeToggle.addEventListener('click', function() {
+        var isDark = document.body.classList.contains('dark-theme');
+        var newTheme = isDark ? 'light' : 'dark';
+        _browser().storage.local.set({themePreference: newTheme});
+        applyTheme(!isDark);
+    });
+})();
+</script>
 </body>
 </html>
