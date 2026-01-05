@@ -11,13 +11,15 @@
     // ============================================================
     
     let currentVolume = 100;
-    let lastAppliedVolume = null;
     
     // Single shared AudioContext for all media elements (browser limit is typically 6)
     let sharedAudioContext = null;
     
     // Map to track gain nodes for each media element
     const elementGainNodes = new WeakMap();
+    
+    // Set to track elements we've already added event listeners to
+    const processedElements = new WeakSet();
 
     // ============================================================
     // Configuration
@@ -118,10 +120,6 @@
         return Array.from(document.querySelectorAll('video, audio'));
     }
 
-    function hasActiveMedia(mediaElements) {
-        return mediaElements.some((el) => !el.paused);
-    }
-
     // ============================================================
     // Audio Context Management (Part of changeSoundVolume rewrite)
     // ============================================================
@@ -210,20 +208,40 @@
     }
 
     // ============================================================
+    // Media Element Event Handling
+    // Ensures volume is applied when media starts playing
+    // ============================================================
+    
+    function onMediaPlay(event) {
+        const element = event.target;
+        // Apply volume when media starts playing
+        if (typeof browser !== 'undefined') {
+            applyVolumeToElement(element, currentVolume);
+        }
+    }
+    
+    function processMediaElement(element) {
+        // Skip if already processed
+        if (processedElements.has(element)) {
+            return;
+        }
+        processedElements.add(element);
+        
+        // Add play event listener to apply volume when media starts
+        element.addEventListener('play', onMediaPlay);
+        
+        // If already playing, apply volume immediately
+        if (!element.paused && typeof browser !== 'undefined') {
+            applyVolumeToElement(element, currentVolume);
+        }
+    }
+
+    // ============================================================
     // Main Method: changeSoundVolume (Completely Rewritten)
     // Applies the current volume to all media elements
     // ============================================================
     
     function changeSoundVolume() {
-        const mediaElements = getMediaElements();
-        
-        // Only proceed if volume changed and there's active media
-        if (currentVolume === lastAppliedVolume || !hasActiveMedia(mediaElements)) {
-            return;
-        }
-
-        lastAppliedVolume = currentVolume;
-        
         // Save volume for persistence
         saveVolume(currentVolume);
         
@@ -240,13 +258,48 @@
             return;
         }
 
-        // Apply volume to each media element using Web Audio API
+        // Apply volume to all media elements
+        const mediaElements = getMediaElements();
         mediaElements.forEach((element) => {
+            processMediaElement(element);
             const src = element.src || element.currentSrc;
             if (src && !isIgnoredHost(src)) {
                 applyVolumeToElement(element, currentVolume);
             }
         });
+    }
+
+    // ============================================================
+    // MutationObserver for Dynamically Added Media Elements
+    // ============================================================
+    
+    function setupMutationObserver() {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check if the added node is a media element
+                        if (node.tagName === 'VIDEO' || node.tagName === 'AUDIO') {
+                            processMediaElement(node);
+                        }
+                        // Check for media elements within the added node
+                        if (node.querySelectorAll) {
+                            const mediaElements = node.querySelectorAll('video, audio');
+                            mediaElements.forEach((el) => {
+                                processMediaElement(el);
+                            });
+                        }
+                    }
+                });
+            });
+        });
+        
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+        
+        return observer;
     }
 
     // ============================================================
@@ -259,7 +312,6 @@
                 const newVolume = Number(request.data.soundVolume);
                 if (!isNaN(newVolume) && newVolume >= 0 && newVolume <= 600) {
                     currentVolume = newVolume;
-                    saveVolume(currentVolume);
                     changeSoundVolume();
                 }
             }
@@ -278,9 +330,17 @@
         // Register message listener
         getBrowser().runtime.onMessage.addListener(handleMessage);
         
-        // Load saved volume on startup (fire-and-forget - volume defaults to 100)
-        loadSavedVolume().catch(function() {
-            // Silently ignore errors, currentVolume defaults to 100
+        // Load saved volume on startup
+        loadSavedVolume().then(function() {
+            // Process existing media elements on page
+            getMediaElements().forEach(processMediaElement);
+            
+            // Set up observer for dynamically added elements
+            setupMutationObserver();
+        }).catch(function() {
+            // Still set up observer even if loading volume failed
+            getMediaElements().forEach(processMediaElement);
+            setupMutationObserver();
         });
     }
 
